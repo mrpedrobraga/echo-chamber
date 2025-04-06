@@ -1,11 +1,11 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
-	"version": "1.0.0",
+	"id": "echo-chamber",
+	"name": "Echo Chamber",
+	"version": "0.0.1",
 	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"description": "A plugin that borrows the affordances of Twitter for quick note-taking. Scream at the void!",
+	"author": "Pedro Braga",
+	"authorUrl": "https://mrpedrobraga.com",
+	"fundingUrl": "https://mrpedrobraga.com",
 	"isDesktopOnly": false
 }
