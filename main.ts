@@ -7,6 +7,7 @@ interface MyPluginSettings {
 }
 
 const POSTS_VIEW_TYPE = 'posts-view';
+const POSTS_VIEW_ICON = 'message-square-text';
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
 	postsFolder: 'posts'
@@ -23,23 +24,29 @@ export default class EchoChamberPlugin extends Plugin {
 			(leaf) => new EchoChamberPostsView(leaf, this)
 		);
 
-		const echoChamberRiconIconEl = this.addRibbonIcon('message-square-text', 'Post to your Echo Chamber', (evt: MouseEvent) => {
-			this.openPostsView();
+		const echoChamberRiconIconEl = this.addRibbonIcon(POSTS_VIEW_ICON, 'Post to your Echo Chamber', (evt: MouseEvent) => {
+			this.openPostsView(false);
 		});
 		echoChamberRiconIconEl.addClass('my-plugin-ribbon-class');
 		this.addCommand({
 			id: 'open-posts-view',
 			name: 'Open Post View',
 			callback: () => {
-				this.openPostsView();
+				this.openPostsView(false);
 			},
 		});
-
+		this.addCommand({
+			id: 'open-posts-view-sidebar',
+			name: 'Open Post View On Right Sidebar',
+			callback: () => {
+				this.openPostsView(true);
+			},
+		});
 
 		this.addSettingTab(new EchoChamberSettingsTab(this.app, this));
 	}
 
-	async openPostsView() {
+	async openPostsView(sidebar: boolean) {
 		const { workspace } = this.app;
 
 		let leaf: WorkspaceLeaf | null = null;
@@ -48,12 +55,15 @@ export default class EchoChamberPlugin extends Plugin {
 		if (leaves.length > 0) {
 			leaf = leaves[0];
 		} else {
-			leaf = workspace.getLeaf();
+			if (sidebar) {
+				leaf = workspace.getRightLeaf(false);
+			} else {
+				leaf = workspace.getLeaf();
+			}
 			await (leaf as WorkspaceLeaf).setViewState({ type: POSTS_VIEW_TYPE, active: true });
 		}
 
 		workspace.revealLeaf(leaf as WorkspaceLeaf);
-
 	}
 
 	onunload() {
@@ -117,6 +127,10 @@ class EchoChamberPostsView extends ItemView {
 		return "Your Echo Chamber"
 	}
 
+	getIcon() {
+		return POSTS_VIEW_ICON;
+	}
+
 	protected async onOpen(): Promise<void> {
 		const container = this.containerEl.children[1];
 		container.empty();
@@ -138,20 +152,8 @@ class EchoChamberPostsView extends ItemView {
 					return;
 				}
 
-				try {
-					await this.ensureFolderExists(this.plugin.settings.postsFolder);
-
-					// Generating a unique filename (using timestamps);
-					const now = new Date();
-					const timestamp = now.toISOString().replace(/[:.]/g, '-');
-					const fileName = `${timestamp}.md`;
-					const filePath = `${this.plugin.settings.postsFolder}/${fileName}`;
-					const newFile = await this.app.vault.create(filePath, content);
-					new Notice(`Note created: ${fileName}`);
+				if (await this.createNote(content)) {
 					textArea.value = '';
-				} catch (error) {
-					console.error("Error creating note:", error);
-					new Notice(`Error creating note: ${error.message}`);
 				}
 			}
 		});
@@ -159,8 +161,27 @@ class EchoChamberPostsView extends ItemView {
 		/* Notes List Area */
 		this.notesListContainer = container.createDiv('notes-list-container');
 		this.notesListContainer.id = 'post-notes-list';
-		await this.renderTimeline();
+		await this.renderFullTimeline();
 		this.registerVaultEvents();
+	}
+
+	private async createNote(content: string): Promise<boolean> {
+		try {
+			await this.ensureFolderExists(this.plugin.settings.postsFolder);
+
+			// Generating a unique filename (using timestamps);
+			const now = new Date();
+			const timestamp = now.toISOString().replace(/[:.]/g, '-');
+			const fileName = `${timestamp}.md`;
+			const filePath = `${this.plugin.settings.postsFolder}/${fileName}`;
+			await this.app.vault.create(filePath, content);
+			new Notice(`Note created: ${fileName}`);
+			return true;
+		} catch (error) {
+			console.error("Error creating note:", error);
+			new Notice(`Error creating note: ${error.message}`);
+			return false;
+		}
 	}
 
 	async ensureFolderExists(folderPath: string): Promise<void> {
@@ -186,107 +207,26 @@ class EchoChamberPostsView extends ItemView {
 
 		const ul = this.notesListContainer.querySelector('.post-notes-ul');
 		if (ul) {
-			// Create a new list item for the new post
-			const newLi = await this.renderPost(document.createElement('ul'), newFile);
-			// Insert it at the beginning of the list
+			const newLi = await this.createPostElement(document.createElement('ul'), newFile);
 			ul.prepend(newLi);
 			this.renderedPosts.set(newFile.path, newLi);
 		} else {
-			// If the list doesn't exist yet (first post?), just re-render
-			await this.renderTimeline();
+			await this.renderFullTimeline();
 		}
 	}
 
-	async updatePost(file: TFile): Promise<void> {
-        const renderedElement = this.renderedPosts.get(file.path);
-        if (renderedElement) {
-            const postContentEl = renderedElement.querySelector('.post-content');
-            const postHeader = renderedElement.querySelector('.post-header');
-            if (postContentEl && postContentEl instanceof HTMLElement && postHeader) {
-                const timestampEl = postHeader.querySelector('.post-timestamp');
-                try {
-                    const content = await this.app.vault.read(file);
-                    postContentEl.empty();
-                    await MarkdownRenderer.render(this.app, content, postContentEl, file.path, this);
-                    if (timestampEl) {
-                        timestampEl.setText(moment(file.stat.mtime).fromNow());
-                    }
-                } catch (error) {
-                    console.error(`Error updating content for ${file.name}:`, error);
-                    postContentEl.setText(`Error loading post content.`);
-                }
-            }
-        } else {
-            console.warn(`Post not found in rendered list for update: ${file.path}`);
-            await this.renderTimeline();
-        }
-    }
-
-	async removeDeletedPost(deletedFile: TFile): Promise<void> {
-		const renderedElement = this.renderedPosts.get(deletedFile.path);
-		if (renderedElement) {
-			renderedElement.remove();
-			this.renderedPosts.delete(deletedFile.path);
-		} else {
-			console.warn(`Deleted post not found in rendered list: ${deletedFile.path}`);
-			await this.renderTimeline();
-		}
-	}
-
-	async renderTimeline(): Promise<void> {
-		if (!this.notesListContainer) {
-			console.error("Notes list container is not initialized.");
-			return;
-		}
-
-		const listContainer = this.notesListContainer;
-		listContainer.empty();
-		this.renderedPosts.clear();
-
-		try {
-			const folder = this.app.vault.getAbstractFileByPath(this.plugin.settings.postsFolder);
-			if (!folder || !(folder instanceof TFolder)) {
-				listContainer.createEl('p', { text: `No posts at "${this.plugin.settings.postsFolder}".` });
-				return;
-			}
-
-			const notes = this.app.vault.getMarkdownFiles().filter(file =>
-				file.path.startsWith(this.plugin.settings.postsFolder + '/')
-			);
-
-			notes.sort((a, b) => b.stat.mtime - a.stat.mtime);
-
-			if (notes.length === 0) {
-				listContainer.createEl('p', { text: `No notes found in "${this.plugin.settings.postsFolder}".` });
-			} else {
-				const ul = listContainer.createEl('ul', 'post-notes-ul');
-				notes.forEach(async (note) => {
-					const li = await this.renderPost(ul, note);
-					this.renderedPosts.set(note.path, li);
-				});
-			}
-		} catch (error) {
-			console.error("Error rendering notes list:", error);
-			listContainer.empty();
-			listContainer.createEl('p', { text: `Error loading notes: ${error.message}` });
-			new Notice(`Error loading notes: ${error.message}`);
-		}
-	}
-
-	async renderPost(container: HTMLUListElement, noteFile: TFile) {
-		const li = container.createEl('li', 'post-item');
-
-		let frontMatter = null;
+	async createPostElement(container: HTMLUListElement, noteFile: TFile) {
+		const postItem = container.createEl('li', 'post-item');
 
 		/* Header: Username and Timestamp */
-		const postHeader = li.createDiv('post-header');
+		const postHeader = postItem.createDiv('post-header');
 		const usernameEl = postHeader.createSpan('post-username');
 		usernameEl.setText('You');
 		const timestampEl = postHeader.createSpan('post-timestamp');
 		timestampEl.setText(moment(noteFile.stat.mtime).fromNow());
 
 		/* Content */
-		const postContentEl = li.createDiv('post-content');
+		const postContentEl = postItem.createDiv('post-content');
 		try {
 			const content = await this.app.vault.read(noteFile);
 			await MarkdownRenderer.render(this.app, content, postContentEl, noteFile.path, this);
@@ -296,7 +236,7 @@ class EchoChamberPostsView extends ItemView {
 		}
 
 		/* Actions */
-		const postActions = li.createDiv('post-actions');
+		const postActions = postItem.createDiv('post-actions');
 		const heartButton = postActions.createEl('button', { cls: 'post-action-button post-heart-button' });
 		const heartIcon = getIcon('heart');
 		if (heartIcon) {
@@ -334,7 +274,83 @@ class EchoChamberPostsView extends ItemView {
 			this.app.workspace.openLinkText(noteFile.path, '', false);
 		});
 
-		return li;
+		return postItem;
+	}
+
+	async updatePostElement(file: TFile): Promise<void> {
+        const renderedElement = this.renderedPosts.get(file.path);
+        if (renderedElement) {
+            const postContentEl = renderedElement.querySelector('.post-content');
+            const postHeader = renderedElement.querySelector('.post-header');
+            if (postContentEl && postContentEl instanceof HTMLElement && postHeader) {
+                const timestampEl = postHeader.querySelector('.post-timestamp');
+                try {
+                    const content = await this.app.vault.read(file);
+                    postContentEl.empty();
+                    await MarkdownRenderer.render(this.app, content, postContentEl, file.path, this);
+                    if (timestampEl) {
+                        timestampEl.setText(moment(file.stat.mtime).fromNow());
+                    }
+                } catch (error) {
+                    console.error(`Error updating content for ${file.name}:`, error);
+                    postContentEl.setText(`Error loading post content.`);
+                }
+            }
+        } else {
+            console.warn(`Post not found in rendered list for update: ${file.path}`);
+            await this.renderFullTimeline();
+        }
+    }
+
+	async removePostElement(deletedFile: TFile): Promise<void> {
+		const renderedElement = this.renderedPosts.get(deletedFile.path);
+		if (renderedElement) {
+			renderedElement.remove();
+			this.renderedPosts.delete(deletedFile.path);
+		} else {
+			console.warn(`Deleted post not found in rendered list: ${deletedFile.path}`);
+			await this.renderFullTimeline();
+		}
+	}
+
+	async renderFullTimeline(): Promise<void> {
+		if (!this.notesListContainer) {
+			console.error("Notes list container is not initialized.");
+			return;
+		}
+
+		const listContainer = this.notesListContainer;
+		listContainer.empty();
+		this.renderedPosts.clear();
+
+		try {
+			const folder = this.app.vault.getAbstractFileByPath(this.plugin.settings.postsFolder);
+			if (!folder || !(folder instanceof TFolder)) {
+				listContainer.createEl('p', { text: `No posts at "${this.plugin.settings.postsFolder}".` });
+				return;
+			}
+
+			const notes = this.app.vault.getMarkdownFiles().filter(file =>
+				file.path.startsWith(this.plugin.settings.postsFolder + '/')
+			);
+
+			notes.sort((a, b) => b.stat.mtime - a.stat.mtime);
+
+			if (notes.length === 0) {
+				listContainer.createEl('p', { text: `No notes found in "${this.plugin.settings.postsFolder}".` });
+			} else {
+				const ul = listContainer.createEl('ul', 'post-notes-ul');
+				notes.forEach(async (note) => {
+					const li = await this.createPostElement(ul, note);
+					this.renderedPosts.set(note.path, li);
+				});
+			}
+		} catch (error) {
+			console.error("Error rendering notes list:", error);
+			listContainer.empty();
+			listContainer.createEl('p', { text: `Error loading notes: ${error.message}` });
+			new Notice(`Error loading notes: ${error.message}`);
+		}
 	}
 
 	registerVaultEvents(): void {
@@ -348,14 +364,14 @@ class EchoChamberPostsView extends ItemView {
 
 		this.registerEvent(this.app.vault.on('modify', async (file) => {
 			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/')) {
-				await this.updatePost(file); // Assuming you have this
+				await this.updatePostElement(file); // Assuming you have this
 			}
 		}));
 
 
 		this.registerEvent(this.app.vault.on('delete', async (file) => {
 			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/')) {
-				await this.removeDeletedPost(file);
+				await this.removePostElement(file);
 			}
 		}));
 
@@ -364,7 +380,7 @@ class EchoChamberPostsView extends ItemView {
 			const wasInPostsFolder = oldPath.startsWith(postsFolderPath + '/');
 
 			if (isInPostsFolder || wasInPostsFolder) {
-				this.renderTimeline();
+				this.renderFullTimeline();
 			}
 		}));
 	}
