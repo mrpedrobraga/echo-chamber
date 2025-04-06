@@ -1,8 +1,114 @@
-/*
+.post-view-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    align-items: center;
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.post-input-container {
+    padding: 10px;
+    border-block-end: 1px solid var(--background-modifier-border);
+}
 
-If your plugin does not need CSS, delete this file.
+.post-input-textarea {
+    width: 500px;
+    align-self: center;
+    min-height: 60px;
+    font-size: 1rem;
+    resize: vertical;
+    padding: 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background-color: var(--background-secondary);
+    color: var(--text-normal);
+}
 
-*/
+.notes-list-container {
+    width: 500px;
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.post-notes-ul {
+    list-style: none;
+    padding-inline-start: 0;
+    margin: 0;
+}
+
+/* Base container for each post */
+.post-item {
+    padding: 15px;
+    margin-block-end: 15px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    background-color: var(--background-secondary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.post-item:last-child {
+    margin-block-end: 0;
+}
+
+.post-header {
+    display: flex;
+    align-items: baseline;
+    margin-block-end: 8px;
+}
+
+.post-username {
+    font-weight: bold;
+    color: var(--text-normal);
+    margin-inline-end: 5px;
+}
+
+.post-timestamp {
+    color: var(--text-muted);
+    font-size: 0.8em;
+}
+
+.post-content {
+    font-size: 1rem;
+    user-select: text;
+    color: var(--text-normal);
+}
+
+.post-actions {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    justify-content: flex-start;
+    padding-block-start: 10px;
+    border-block-start: 1px solid var(--background-modifier-border-hover);
+}
+
+.post-action-button {
+    background: none;
+    border: none;
+    padding: 5px 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-radius: 4px;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.post-action-button:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.post-heart-button.liked {
+    color: #e74c3c;
+}
+
+.post-action-button svg {
+    width: 16px;
+    height: 16px;
+    vertical-align: middle;
+    fill: currentColor;
+}
