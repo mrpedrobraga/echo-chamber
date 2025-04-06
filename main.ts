@@ -271,7 +271,7 @@ class EchoChamberPostsView extends ItemView {
 		}
 		openButton.addEventListener('click', (ev) => {
 			ev.preventDefault();
-			this.app.workspace.openLinkText(noteFile.path, '', false);
+			this.app.workspace.openLinkText(noteFile.path, '', 'split');
 		});
 
 		return postItem;
@@ -357,20 +357,20 @@ class EchoChamberPostsView extends ItemView {
 		const postsFolderPath = this.plugin.settings.postsFolder;
 
 		this.registerEvent(this.app.vault.on('create', async (file) => {
-			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/')) {
+			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/') && file.extension == 'md') {
 				await this.insertNewPost(file);
 			}
 		}));
 
 		this.registerEvent(this.app.vault.on('modify', async (file) => {
-			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/')) {
-				await this.updatePostElement(file); // Assuming you have this
+			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/') && file.extension == 'md') {
+				await this.updatePostElement(file);
 			}
 		}));
 
 
 		this.registerEvent(this.app.vault.on('delete', async (file) => {
-			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/')) {
+			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/') && file.extension == 'md') {
 				await this.removePostElement(file);
 			}
 		}));

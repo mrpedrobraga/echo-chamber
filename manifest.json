@@ -3,9 +3,8 @@
 	"name": "Echo Chamber",
 	"version": "0.0.1",
 	"minAppVersion": "0.15.0",
-	"description": "A plugin that borrows the affordances of Twitter for quick note-taking. Scream at the void!",
+	"description": "A plugin that borrows the affordances of Twitter for quick note-taking.",
 	"author": "Pedro Braga",
 	"authorUrl": "https://mrpedrobraga.com",
-	"fundingUrl": "https://mrpedrobraga.com",
 	"isDesktopOnly": false
 }
