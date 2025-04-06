@@ -1,4 +1,4 @@
-import { App, getIcon, ItemView, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, moment, MarkdownRenderer, getFrontMatterInfo} from 'obsidian';
+import { App, getIcon, ItemView, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, moment, MarkdownRenderer, getFrontMatterInfo, FrontMatterCache } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -96,12 +96,13 @@ class EchoChamberSettingsTab extends PluginSettingTab {
 }
 
 interface PostFrontmatter {
-    liked?: boolean;
+	liked?: boolean;
 }
 
 class EchoChamberPostsView extends ItemView {
 	plugin: EchoChamberPlugin;
 	private notesListContainer: HTMLElement | null = null;
+	private renderedPosts: Map<string, HTMLElement> = new Map();
 
 	constructor(leaf: WorkspaceLeaf, plugin: EchoChamberPlugin) {
 		super(leaf);
@@ -145,13 +146,9 @@ class EchoChamberPostsView extends ItemView {
 					const timestamp = now.toISOString().replace(/[:.]/g, '-');
 					const fileName = `${timestamp}.md`;
 					const filePath = `${this.plugin.settings.postsFolder}/${fileName}`;
-					await this.app.vault.create(filePath, content);
+					const newFile = await this.app.vault.create(filePath, content);
 					new Notice(`Note created: ${fileName}`);
 					textArea.value = '';
-
-					// Update the timeline naively;
-					await this.renderTimeline();
-
 				} catch (error) {
 					console.error("Error creating note:", error);
 					new Notice(`Error creating note: ${error.message}`);
@@ -181,6 +178,61 @@ class EchoChamberPostsView extends ItemView {
 		}
 	}
 
+	async insertNewPost(newFile: TFile): Promise<void> {
+		if (!this.notesListContainer) {
+			console.error("Notes list container is not initialized.");
+			return;
+		}
+
+		const ul = this.notesListContainer.querySelector('.post-notes-ul');
+		if (ul) {
+			// Create a new list item for the new post
+			const newLi = await this.renderPost(document.createElement('ul'), newFile);
+			// Insert it at the beginning of the list
+			ul.prepend(newLi);
+			this.renderedPosts.set(newFile.path, newLi);
+		} else {
+			// If the list doesn't exist yet (first post?), just re-render
+			await this.renderTimeline();
+		}
+	}
+
+	async updatePost(file: TFile): Promise<void> {
+        const renderedElement = this.renderedPosts.get(file.path);
+        if (renderedElement) {
+            const postContentEl = renderedElement.querySelector('.post-content');
+            const postHeader = renderedElement.querySelector('.post-header');
+            if (postContentEl && postContentEl instanceof HTMLElement && postHeader) {
+                const timestampEl = postHeader.querySelector('.post-timestamp');
+                try {
+                    const content = await this.app.vault.read(file);
+                    postContentEl.empty();
+                    await MarkdownRenderer.render(this.app, content, postContentEl, file.path, this);
+                    if (timestampEl) {
+                        timestampEl.setText(moment(file.stat.mtime).fromNow());
+                    }
+                } catch (error) {
+                    console.error(`Error updating content for ${file.name}:`, error);
+                    postContentEl.setText(`Error loading post content.`);
+                }
+            }
+        } else {
+            console.warn(`Post not found in rendered list for update: ${file.path}`);
+            await this.renderTimeline();
+        }
+    }
+
+	async removeDeletedPost(deletedFile: TFile): Promise<void> {
+		const renderedElement = this.renderedPosts.get(deletedFile.path);
+		if (renderedElement) {
+			renderedElement.remove();
+			this.renderedPosts.delete(deletedFile.path);
+		} else {
+			console.warn(`Deleted post not found in rendered list: ${deletedFile.path}`);
+			await this.renderTimeline();
+		}
+	}
+
 	async renderTimeline(): Promise<void> {
 		if (!this.notesListContainer) {
 			console.error("Notes list container is not initialized.");
@@ -189,6 +241,7 @@ class EchoChamberPostsView extends ItemView {
 
 		const listContainer = this.notesListContainer;
 		listContainer.empty();
+		this.renderedPosts.clear();
 
 		try {
 			const folder = this.app.vault.getAbstractFileByPath(this.plugin.settings.postsFolder);
@@ -207,7 +260,10 @@ class EchoChamberPostsView extends ItemView {
 				listContainer.createEl('p', { text: `No notes found in "${this.plugin.settings.postsFolder}".` });
 			} else {
 				const ul = listContainer.createEl('ul', 'post-notes-ul');
-				notes.forEach(this.renderPost.bind(this, ul));
+				notes.forEach(async (note) => {
+					const li = await this.renderPost(ul, note);
+					this.renderedPosts.set(note.path, li);
+				});
 			}
 		} catch (error) {
 			console.error("Error rendering notes list:", error);
@@ -218,77 +274,88 @@ class EchoChamberPostsView extends ItemView {
 	}
 
 	async renderPost(container: HTMLUListElement, noteFile: TFile) {
-        const li = container.createEl('li', 'post-item');
+		const li = container.createEl('li', 'post-item');
 
 		let frontMatter = null;
 
-        /* Header: Username and Timestamp */
-        const postHeader = li.createDiv('post-header');
-        const usernameEl = postHeader.createSpan('post-username');
-        usernameEl.setText('You');
-        const timestampEl = postHeader.createSpan('post-timestamp');
-        timestampEl.setText(moment(noteFile.stat.mtime).fromNow());
+		/* Header: Username and Timestamp */
+		const postHeader = li.createDiv('post-header');
+		const usernameEl = postHeader.createSpan('post-username');
+		usernameEl.setText('You');
+		const timestampEl = postHeader.createSpan('post-timestamp');
+		timestampEl.setText(moment(noteFile.stat.mtime).fromNow());
 
-        /* Content */
-        const postContentEl = li.createDiv('post-content');
-        try {
-            const content = await this.app.vault.read(noteFile);
-			frontMatter = getFrontMatterInfo(content);
-            await MarkdownRenderer.render(this.app, content, postContentEl, noteFile.path, this);
-        } catch (error) {
-            console.error(`Error reading note ${noteFile.name}:`, error);
-            postContentEl.setText(`Error loading post content.`);
-        }
+		/* Content */
+		const postContentEl = li.createDiv('post-content');
+		try {
+			const content = await this.app.vault.read(noteFile);
+			await MarkdownRenderer.render(this.app, content, postContentEl, noteFile.path, this);
+		} catch (error) {
+			console.error(`Error reading note ${noteFile.name}:`, error);
+			postContentEl.setText(`Error loading post content.`);
+		}
 
-        /* Actions */
-        const postActions = li.createDiv('post-actions');
+		/* Actions */
+		const postActions = li.createDiv('post-actions');
+		const heartButton = postActions.createEl('button', { cls: 'post-action-button post-heart-button' });
+		const heartIcon = getIcon('heart');
+		if (heartIcon) {
+			heartButton.appendChild(heartIcon);
+		} else {
+			heartButton.setText('Like');
+		}
 
-        const heartButton = postActions.createEl('button', { cls: 'post-action-button post-heart-button' });
-        const heartIcon = getIcon('heart');
-        if (heartIcon) {
-            heartButton.appendChild(heartIcon);
-        } else {
-            heartButton.setText('Like');
-        }
+		const metadata = this.app.metadataCache.getFileCache(noteFile);
+		if (metadata?.frontmatter) {
+			let frontMatter: FrontMatterCache = metadata.frontmatter;
+			heartButton.toggleClass('liked', frontMatter['liked'] ?? false);
+		}
 
-        heartButton.addEventListener('click', () => {
-            heartButton.classList.toggle('liked');
+		heartButton.addEventListener('click', () => {
+			const metadata = this.app.metadataCache.getFileCache(noteFile);
 			this.app.fileManager.processFrontMatter(noteFile, (frontmatter: any) => {
 				frontmatter['liked'] = heartButton.hasClass('liked');
+			});
+			if (metadata?.frontmatter) {
+				let frontMatter: FrontMatterCache = metadata.frontmatter;
+				heartButton.toggleClass('liked', frontMatter['liked'] ?? false);
 			}
-        });
+		});
 
-        const openButton = postActions.createEl('button', { cls: 'post-action-button post-open-button' });
-        const openIcon = getIcon('external-link');
-        if (openIcon) {
-            openButton.appendChild(openIcon);
-        } else {
-            openButton.setText('Open');
-        }
-        openButton.addEventListener('click', (ev) => {
-            ev.preventDefault();
-            this.app.workspace.openLinkText(noteFile.path, '', false);
-        });
-    }
+		const openButton = postActions.createEl('button', { cls: 'post-action-button post-open-button' });
+		const openIcon = getIcon('external-link');
+		if (openIcon) {
+			openButton.appendChild(openIcon);
+		} else {
+			openButton.setText('Open');
+		}
+		openButton.addEventListener('click', (ev) => {
+			ev.preventDefault();
+			this.app.workspace.openLinkText(noteFile.path, '', false);
+		});
+
+		return li;
+	}
 
 	registerVaultEvents(): void {
 		const postsFolderPath = this.plugin.settings.postsFolder;
 
-		this.registerEvent(this.app.vault.on('create', (file) => {
+		this.registerEvent(this.app.vault.on('create', async (file) => {
 			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/')) {
-				this.renderTimeline();
+				await this.insertNewPost(file);
 			}
 		}));
 
-		this.registerEvent(this.app.vault.on('modify', (file) => {
+		this.registerEvent(this.app.vault.on('modify', async (file) => {
 			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/')) {
-				this.renderTimeline();
+				await this.updatePost(file); // Assuming you have this
 			}
 		}));
 
-		this.registerEvent(this.app.vault.on('delete', (file) => {
+
+		this.registerEvent(this.app.vault.on('delete', async (file) => {
 			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/')) {
-				this.renderTimeline();
+				await this.removeDeletedPost(file);
 			}
 		}));
 
