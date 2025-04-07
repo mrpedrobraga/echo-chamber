@@ -62,16 +62,33 @@
     margin-block-end: 8px;
 }
 
-.post-username {
+.post-display-name {
     font-weight: bold;
     color: var(--text-normal);
     margin-inline-end: 5px;
 }
 
+.post-username {
+    color: var(--text-muted);
+    margin-inline-end: 5px;
+    flex-grow: 1;
+}
+
+.post-username::before {
+    content: "@";
+}
+
 .post-timestamp {
     color: var(--text-muted);
     font-size: 0.8em;
+    justify-self: flex-end;
 }
+
+.post-view {
+    margin: 0;
+    position: relative;
+}
+
 
 .post-content {
     font-size: 1rem;
@@ -81,9 +98,9 @@
 
 .post-actions {
     display: flex;
-    gap: 15px;
+    gap: 8px;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: space-evenly;
     padding-block-start: 10px;
     border-block-start: 1px solid var(--background-modifier-border-hover);
 }

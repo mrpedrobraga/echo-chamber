@@ -1,8 +1,10 @@
-import { App, getIcon, ItemView, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, moment, MarkdownRenderer, getFrontMatterInfo, FrontMatterCache, MarkdownView } from 'obsidian';
+import { App, getIcon, ItemView, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, moment, MarkdownRenderer, getFrontMatterInfo, FrontMatterCache, MarkdownView, MarkdownRenderChild, stringifyYaml, parseYaml } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
 interface MyPluginSettings {
+	username: string;
+	displayName: string;
 	postsFolder: string;
 }
 
@@ -10,6 +12,8 @@ const POSTS_VIEW_TYPE = 'posts-view';
 const POSTS_VIEW_ICON = 'message-square-text';
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
+	username: 'local',
+	displayName: 'You',
 	postsFolder: 'posts'
 }
 
@@ -92,6 +96,34 @@ class EchoChamberSettingsTab extends PluginSettingTab {
 
 		containerEl.empty();
 
+		const profileHeader = containerEl.createEl('h2');
+		profileHeader.innerText = "Profile";
+
+		new Setting(containerEl)
+			.setName('Username')
+			.setDesc('The @ used for your posts!')
+			.addText(text => text
+				.setPlaceholder('local')
+				.setValue(this.plugin.settings.username)
+				.onChange(async (value) => {
+					this.plugin.settings.username = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Display Name')
+			.setDesc('The name displayed on your posts!')
+			.addText(text => text
+				.setPlaceholder('You')
+				.setValue(this.plugin.settings.displayName)
+				.onChange(async (value) => {
+					this.plugin.settings.displayName = value;
+					await this.plugin.saveSettings();
+				}));
+
+		const storageHeader = containerEl.createEl('h2');
+		storageHeader.innerText = "Storage";
+
 		new Setting(containerEl)
 			.setName('Posts Folder')
 			.setDesc('Folder where the posts are to be stored!')
@@ -166,7 +198,7 @@ class EchoChamberPostsView extends ItemView {
 		this.registerVaultEvents();
 	}
 
-	private async createNote(content: string): Promise<boolean> {
+	private async createNote(rawContent: string): Promise<boolean> {
 		try {
 			await this.ensureFolderExists(this.plugin.settings.postsFolder);
 
@@ -175,8 +207,17 @@ class EchoChamberPostsView extends ItemView {
 			const timestamp = now.toISOString().replace(/[:.]/g, '-');
 			const fileName = `${timestamp}.md`;
 			const filePath = `${this.plugin.settings.postsFolder}/${fileName}`;
+
+			const frontmatterInfo = getFrontMatterInfo(rawContent);
+			const newFrontmatter = stringifyYaml({
+				liked: false,
+				author_username: this.plugin.settings.username,
+				author_display_name: this.plugin.settings.displayName,
+			});
+			const content = `---\n${newFrontmatter}\n---\n${rawContent.slice(frontmatterInfo.contentStart)}`;
+
 			await this.app.vault.create(filePath, content);
-			new Notice(`Note created: ${fileName}`);
+			new Notice(`Post created!`);
 			return true;
 		} catch (error) {
 			console.error("Error creating note:", error);
@@ -216,23 +257,39 @@ class EchoChamberPostsView extends ItemView {
 		}
 	}
 
-	async createPostElement(container: HTMLUListElement, noteFile: TFile) {
+	async createPostElement(container: HTMLUListElement, file: TFile) {
+		const metadata = this.app.metadataCache.getFileCache(file);
+		let content = null;
+		let frontmatter;
+		if (!metadata) {
+			content = await this.app.vault.read(file);
+			frontmatter = parseYaml(getFrontMatterInfo(content).frontmatter)
+		} else {
+			frontmatter = metadata.frontmatter;
+		}
+
 		const postItem = container.createEl('li', 'post-item');
 
 		/* Header: Username and Timestamp */
 		const postHeader = postItem.createDiv('post-header');
+
+		const displayNameEl = postHeader.createSpan('post-display-name');
+		displayNameEl.setText(frontmatter['author_display_name'] ?? 'Unknown');
+
 		const usernameEl = postHeader.createSpan('post-username');
-		usernameEl.setText('You');
+		usernameEl.setText(frontmatter['author_username'] ?? 'unknown');
+
 		const timestampEl = postHeader.createSpan('post-timestamp');
-		timestampEl.setText(moment(noteFile.stat.mtime).fromNow());
+		timestampEl.setText(moment(file.stat.mtime).fromNow());
 
 		/* Content */
 		const postContentEl = postItem.createDiv('post-content');
 		try {
-			const content = await this.app.vault.read(noteFile);
-			await MarkdownRenderer.render(this.app, content, postContentEl, noteFile.path, this);
+			content ??= await this.app.vault.read(file);
+			await MarkdownRenderer.render(this.app, content, postContentEl, file.path, this);
+			//await MarkdownRenderer.render(this.app, `![[${noteFile.name}]]`, postContentEl, noteFile.path, this);
 		} catch (error) {
-			console.error(`Error reading note ${noteFile.name}:`, error);
+			console.error(`Error reading note ${file.name}:`, error);
 			postContentEl.setText(`Error loading post content.`);
 		}
 
@@ -246,58 +303,76 @@ class EchoChamberPostsView extends ItemView {
 			heartButton.setText('Like');
 		}
 
-		const metadata = this.app.metadataCache.getFileCache(noteFile);
 		heartButton.classList.toggle('liked', metadata?.frontmatter?.['liked'] || false);
 		heartButton.addEventListener('click', async () => {
-			const metadata = this.app.metadataCache.getFileCache(noteFile);
 			let is_liked = heartButton.hasClass('liked');
 
 			heartButton.classList.toggle('liked', !is_liked);
-			await this.app.fileManager.processFrontMatter(noteFile, (frontmatter: any) => {
+			await this.app.fileManager.processFrontMatter(file, (frontmatter: any) => {
 				frontmatter['liked'] = !is_liked;
 			});
-			
+
 		});
 
 		const openButton = postActions.createEl('button', { cls: 'post-action-button post-open-button' });
 		const openIcon = getIcon('external-link');
 		if (openIcon) {
 			openButton.appendChild(openIcon);
+			openButton.appendText('Open');
 		} else {
 			openButton.setText('Open');
 		}
 		openButton.addEventListener('click', (ev) => {
 			ev.preventDefault();
-			this.app.workspace.openLinkText(noteFile.path, '', 'split');
+			this.app.workspace.openLinkText(file.path, '', 'split');
 		});
 
 		return postItem;
 	}
 
 	async updatePostElement(file: TFile): Promise<void> {
-        const renderedElement = this.renderedPosts.get(file.path);
-        if (renderedElement) {
-            const postContentEl = renderedElement.querySelector('.post-content');
-            const postHeader = renderedElement.querySelector('.post-header');
-            if (postContentEl && postContentEl instanceof HTMLElement && postHeader) {
-                const timestampEl = postHeader.querySelector('.post-timestamp');
-                try {
-                    const content = await this.app.vault.read(file);
-                    postContentEl.empty();
-                    await MarkdownRenderer.render(this.app, content, postContentEl, file.path, this);
-                    if (timestampEl) {
-                        timestampEl.setText(moment(file.stat.mtime).fromNow());
-                    }
-                } catch (error) {
-                    console.error(`Error updating content for ${file.name}:`, error);
-                    postContentEl.setText(`Error loading post content.`);
-                }
-            }
-        } else {
-            console.warn(`Post not found in rendered list for update: ${file.path}`);
-            await this.renderFullTimeline();
-        }
-    }
+		const metadata = this.app.metadataCache.getFileCache(file);
+		let content = null;
+		let frontmatter;
+		if (!metadata) {
+			content = await this.app.vault.read(file);
+			frontmatter = parseYaml(getFrontMatterInfo(content).frontmatter)
+		} else {
+			frontmatter = metadata.frontmatter;
+		}
+
+		const renderedElement = this.renderedPosts.get(file.path);
+		if (renderedElement) {
+			const postContentEl = renderedElement.querySelector('.post-content');
+			const postHeader = renderedElement.querySelector('.post-header');
+			if (postContentEl && postContentEl instanceof HTMLElement && postHeader) {
+				const displayNameEl = postHeader.querySelector('.post-display-name');
+				const usernameEl = postHeader.querySelector('.post-username');
+				const timestampEl = postHeader.querySelector('.post-timestamp');
+				try {
+					content ??= await this.app.vault.read(file);
+					postContentEl.empty();
+					await MarkdownRenderer.render(this.app, content, postContentEl, file.path, this);
+					//await MarkdownRenderer.render(this.app, `![[${file.name}]]`, postContentEl, file.path, this);
+					if (displayNameEl) {
+						displayNameEl.setText(frontmatter?.['author_display_name'] ?? 'Unknown');
+					}
+					if (usernameEl) {
+						usernameEl.setText(frontmatter?.['author_username'] ?? 'unknown');
+					}
+					if (timestampEl) {
+						timestampEl.setText(moment(file.stat.mtime).fromNow());
+					}
+				} catch (error) {
+					console.error(`Error updating content for ${file.name}:`, error);
+					postContentEl.setText(`Error loading post content.`);
+				}
+			}
+		} else {
+			console.warn(`Post not found in rendered list for update: ${file.path}`);
+			await this.renderFullTimeline();
+		}
+	}
 
 	async removePostElement(deletedFile: TFile): Promise<void> {
 		const renderedElement = this.renderedPosts.get(deletedFile.path);
