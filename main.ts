@@ -1,4 +1,4 @@
-import { App, getIcon, ItemView, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, moment, MarkdownRenderer, getFrontMatterInfo, FrontMatterCache, MarkdownView, MarkdownRenderChild, stringifyYaml, parseYaml } from 'obsidian';
+import { App, getIcon, ItemView, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, moment, MarkdownRenderer, getFrontMatterInfo, FrontMatterCache, MarkdownView, MarkdownRenderChild, stringifyYaml, parseYaml, normalizePath } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -286,7 +286,7 @@ class EchoChamberPostsView extends ItemView {
 		const postContentEl = postItem.createDiv('post-content');
 		try {
 			content ??= await this.app.vault.read(file);
-			await MarkdownRenderer.render(this.app, content, postContentEl, file.path, this);
+			await MarkdownRenderer.render(this.app, content, postContentEl, normalizePath(file.path), this);
 			//await MarkdownRenderer.render(this.app, `![[${noteFile.name}]]`, postContentEl, noteFile.path, this);
 		} catch (error) {
 			console.error(`Error reading note ${file.name}:`, error);
@@ -352,7 +352,7 @@ class EchoChamberPostsView extends ItemView {
 				try {
 					content ??= await this.app.vault.read(file);
 					postContentEl.empty();
-					await MarkdownRenderer.render(this.app, content, postContentEl, file.path, this);
+					await MarkdownRenderer.render(this.app, content, postContentEl, normalizePath(file.path), this);
 					//await MarkdownRenderer.render(this.app, `![[${file.name}]]`, postContentEl, file.path, this);
 					if (displayNameEl) {
 						displayNameEl.setText(frontmatter?.['author_display_name'] ?? 'Unknown');
@@ -406,7 +406,7 @@ class EchoChamberPostsView extends ItemView {
 				file.path.startsWith(this.plugin.settings.postsFolder + '/')
 			);
 
-			notes.sort((a, b) => b.stat.mtime - a.stat.mtime);
+			notes.sort((a, b) => b.stat.ctime - a.stat.ctime);
 
 			if (notes.length === 0) {
 				listContainer.createEl('p', { text: `No notes found in "${this.plugin.settings.postsFolder}".` });
