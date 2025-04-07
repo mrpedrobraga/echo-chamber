@@ -12,6 +12,7 @@ https://github.com/user-attachments/assets/d31eed8e-febc-4a78-8db3-f5b748a3d250
 ## Cool Features
 - Posts can contain any markdown that Obsidian can render — even stuff from third-party plugins!
 - You can like your own posts — that does absolutely nothing!
+- You can configure the folder where posts are stored, as well as your own username and display name.
 - You can open the post in split-screen for quick editing.
 
 ## Issues
