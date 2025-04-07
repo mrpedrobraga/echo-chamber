@@ -13,9 +13,9 @@
 
 .post-input-textarea {
     width: 500px;
+    min-height: 100px;
     max-width: 100%;
     align-self: center;
-    min-height: 60px;
     font-size: 1rem;
     resize: vertical;
     padding: 8px;
@@ -27,7 +27,6 @@
 
 .notes-list-container {
     max-width: 100%;
-    width: 500px;
     flex-grow: 1;
     overflow-y: auto;
     padding: 10px;
@@ -42,6 +41,8 @@
 /* Base container for each post */
 .post-item {
     padding: 15px;
+    width: 500px;
+    max-width: 100%;
     margin-block-end: 15px;
     border: 1px solid var(--background-modifier-border);
     border-radius: 8px;

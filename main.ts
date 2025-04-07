@@ -138,7 +138,8 @@ class EchoChamberPostsView extends ItemView {
 
 		/* Input Area */
 		const inputContainer = container.createDiv('post-input-container');
-		const textArea = inputContainer.createEl('textarea', { placeholder: "What's happening?" });
+		const textArea = inputContainer.createEl('textarea');
+		textArea.placeholder = "What's Happening?";
 		textArea.addClass('post-input-textarea'); // Class for styling
 
 		textArea.addEventListener('keydown', async (event) => {
@@ -246,22 +247,16 @@ class EchoChamberPostsView extends ItemView {
 		}
 
 		const metadata = this.app.metadataCache.getFileCache(noteFile);
-		if (metadata?.frontmatter) {
-			let frontMatter: FrontMatterCache = metadata.frontmatter;
-			heartButton.toggleClass('liked', frontMatter['liked'] ?? false);
-		}
-
+		heartButton.classList.toggle('liked', metadata?.frontmatter?.['liked'] || false);
 		heartButton.addEventListener('click', async () => {
 			const metadata = this.app.metadataCache.getFileCache(noteFile);
 			let is_liked = heartButton.hasClass('liked');
 
+			heartButton.classList.toggle('liked', !is_liked);
 			await this.app.fileManager.processFrontMatter(noteFile, (frontmatter: any) => {
 				frontmatter['liked'] = !is_liked;
 			});
-			if (metadata?.frontmatter) {
-				let frontMatter: FrontMatterCache = metadata.frontmatter;
-				heartButton.toggleClass('liked', !is_liked);
-			}
+			
 		});
 
 		const openButton = postActions.createEl('button', { cls: 'post-action-button post-open-button' });
