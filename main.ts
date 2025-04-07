@@ -1,4 +1,4 @@
-import { App, getIcon, ItemView, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, moment, MarkdownRenderer, getFrontMatterInfo, FrontMatterCache } from 'obsidian';
+import { App, getIcon, ItemView, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, moment, MarkdownRenderer, getFrontMatterInfo, FrontMatterCache, MarkdownView } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -251,14 +251,16 @@ class EchoChamberPostsView extends ItemView {
 			heartButton.toggleClass('liked', frontMatter['liked'] ?? false);
 		}
 
-		heartButton.addEventListener('click', () => {
+		heartButton.addEventListener('click', async () => {
 			const metadata = this.app.metadataCache.getFileCache(noteFile);
-			this.app.fileManager.processFrontMatter(noteFile, (frontmatter: any) => {
-				frontmatter['liked'] = heartButton.hasClass('liked');
+			let is_liked = heartButton.hasClass('liked');
+
+			await this.app.fileManager.processFrontMatter(noteFile, (frontmatter: any) => {
+				frontmatter['liked'] = !is_liked;
 			});
 			if (metadata?.frontmatter) {
 				let frontMatter: FrontMatterCache = metadata.frontmatter;
-				heartButton.toggleClass('liked', frontMatter['liked'] ?? false);
+				heartButton.toggleClass('liked', !is_liked);
 			}
 		});
 
