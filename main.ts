@@ -75,6 +75,9 @@ export default class EchoChamberPlugin extends Plugin {
 		}
 
 		workspace.revealLeaf(leaf as WorkspaceLeaf);
+		if (leaf?.view instanceof EchoChamberPostsView) {
+			leaf.view.lockIn();
+		}
 	}
 
 	onunload() {
@@ -210,7 +213,7 @@ class EchoChamberPostsView extends ItemView {
 
 	}
 	
-	private lockIn(): void {
+	lockIn(): void {
 		/* Lock In on Tweeting Mode */
 		this.textarea?.focus();
 	}
