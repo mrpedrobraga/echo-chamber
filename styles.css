@@ -2,6 +2,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    box-sizing: border-box;
 }
 
 .post-input-container {
@@ -29,9 +30,16 @@
 
 .notes-list-container {
     max-width: 100%;
+    margin: 0;
     flex-grow: 1;
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: flex-start;
     overflow-y: auto;
     padding: 10px;
+    padding-inline-start: 20px;
+    scrollbar-width: 10px;
 }
 
 .post-notes-ul {
@@ -112,7 +120,7 @@
     border-block-start: 1px solid var(--background-modifier-border-hover);
 }
 
-@container (width < 400px) {
+@container (width < 4   00px) {
     .post-actions {
         flex-direction: column;
         align-items: stretch;
