@@ -1,21 +1,23 @@
 .post-view-container {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    min-width: 500px;
-    align-items: center;
+    align-items: stretch;
 }
 
 .post-input-container {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     padding: 10px;
     border-block-end: 1px solid var(--background-modifier-border);
 }
 
 .post-input-textarea {
-    width: 500px;
     min-height: 100px;
-    max-width: 100%;
-    align-self: center;
+    min-width: 0;
+    width: 100%;
+    margin-inline: auto;
+    max-width: 500px;
     font-size: 1rem;
     resize: vertical;
     padding: 8px;
@@ -40,9 +42,11 @@
 
 /* Base container for each post */
 .post-item {
+    position: relative;
     padding: 15px;
     width: 500px;
     max-width: 100%;
+    margin-inline: auto;
     margin-block-end: 15px;
     border: 1px solid var(--background-modifier-border);
     border-radius: 8px;
@@ -50,6 +54,7 @@
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
+    transition: 100ms;
 }
 
 .post-item:last-child {
@@ -60,6 +65,7 @@
     display: flex;
     align-items: baseline;
     margin-block-end: 8px;
+    flex-wrap: wrap;
 }
 
 .post-display-name {
@@ -89,7 +95,6 @@
     position: relative;
 }
 
-
 .post-content {
     font-size: 1rem;
     user-select: text;
@@ -98,11 +103,20 @@
 
 .post-actions {
     display: flex;
+    flex-direction: row;
     gap: 8px;
     align-items: center;
     justify-content: space-evenly;
     padding-block-start: 10px;
     border-block-start: 1px solid var(--background-modifier-border-hover);
+}
+
+@container (width < 300px) {
+    .post-actions {
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+    }
 }
 
 .post-action-button {

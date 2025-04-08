@@ -1,6 +1,15 @@
 import { App, getIcon, ItemView, Notice, Plugin, PluginSettingTab, Setting, TFile, TFolder, WorkspaceLeaf, moment, MarkdownRenderer, getFrontMatterInfo, FrontMatterCache, MarkdownView, MarkdownRenderChild, stringifyYaml, parseYaml, normalizePath } from 'obsidian';
 
-// Remember to rename these classes and interfaces!
+/** ECHO CHAMBER
+ * 
+ * Plugin that allow you to "post" notes into your vault.
+ * 
+ * The tweet view consists of a text area from where you can post,
+ * and a scrolling list that shows all your posts.
+ */
+
+const POSTS_VIEW_TYPE = 'posts-view';
+const POSTS_VIEW_ICON = 'message-square-text';
 
 interface MyPluginSettings {
 	username: string;
@@ -8,8 +17,6 @@ interface MyPluginSettings {
 	postsFolder: string;
 }
 
-const POSTS_VIEW_TYPE = 'posts-view';
-const POSTS_VIEW_ICON = 'message-square-text';
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
 	username: 'local',
@@ -71,7 +78,7 @@ export default class EchoChamberPlugin extends Plugin {
 	}
 
 	onunload() {
-
+		/* Nothing to do here! */
 	}
 
 	async loadSettings() {
@@ -138,11 +145,14 @@ class EchoChamberSettingsTab extends PluginSettingTab {
 }
 
 interface PostFrontmatter {
-	liked?: boolean;
+	author_display_name: string;
+	author_username: string;
+	liked: boolean;
 }
 
 class EchoChamberPostsView extends ItemView {
 	plugin: EchoChamberPlugin;
+	private textarea: HTMLTextAreaElement | null = null;
 	private notesListContainer: HTMLElement | null = null;
 	private renderedPosts: Map<string, HTMLElement> = new Map();
 
@@ -172,48 +182,51 @@ class EchoChamberPostsView extends ItemView {
 		const inputContainer = container.createDiv('post-input-container');
 		const textArea = inputContainer.createEl('textarea');
 		textArea.placeholder = "What's Happening?";
-		textArea.addClass('post-input-textarea'); // Class for styling
-
+		textArea.addClass('post-input-textarea');
+		
 		textArea.addEventListener('keydown', async (event) => {
 			if (event.key === 'Enter' && !event.shiftKey) {
 				event.preventDefault();
-
+				
 				const content = textArea.value.trim();
-
+				
 				if (!content) {
-					console.log("Content is empty. Note not created.");
 					return;
 				}
-
+				
 				if (await this.createNote(content)) {
+					// Only clear the tweet if the post was successful.
 					textArea.value = '';
 				}
 			}
 		});
+		this.textarea = textArea;
 
 		/* Notes List Area */
 		this.notesListContainer = container.createDiv('notes-list-container');
 		this.notesListContainer.id = 'post-notes-list';
 		await this.renderFullTimeline();
 		this.registerVaultEvents();
+
+	}
+	
+	private lockIn(): void {
+		/* Lock In on Tweeting Mode */
+		this.textarea?.focus();
 	}
 
 	private async createNote(rawContent: string): Promise<boolean> {
 		try {
 			await this.ensureFolderExists(this.plugin.settings.postsFolder);
-
 			// Generating a unique filename (using timestamps);
-			const now = new Date();
-			const timestamp = now.toISOString().replace(/[:.]/g, '-');
-			const fileName = `${timestamp}.md`;
-			const filePath = `${this.plugin.settings.postsFolder}/${fileName}`;
+			const filePath = `${this.plugin.settings.postsFolder}/${new Date().toISOString().replace(/[:.]/g, '-')}.md`;
 
 			const frontmatterInfo = getFrontMatterInfo(rawContent);
 			const newFrontmatter = stringifyYaml({
 				liked: false,
 				author_username: this.plugin.settings.username,
 				author_display_name: this.plugin.settings.displayName,
-			});
+			} as PostFrontmatter);
 			const content = `---\n${newFrontmatter}\n---\n${rawContent.slice(frontmatterInfo.contentStart)}`;
 
 			await this.app.vault.create(filePath, content);
@@ -221,7 +234,7 @@ class EchoChamberPostsView extends ItemView {
 			return true;
 		} catch (error) {
 			console.error("Error creating note:", error);
-			new Notice(`Error creating note: ${error.message}`);
+			new Notice(`Post Failed: ${error.message}`);
 			return false;
 		}
 	}
@@ -260,7 +273,7 @@ class EchoChamberPostsView extends ItemView {
 	async createPostElement(container: HTMLUListElement, file: TFile) {
 		const metadata = this.app.metadataCache.getFileCache(file);
 		let content = null;
-		let frontmatter;
+		let frontmatter: Partial<PostFrontmatter> | undefined;
 		if (!metadata) {
 			content = await this.app.vault.read(file);
 			frontmatter = parseYaml(getFrontMatterInfo(content).frontmatter)
@@ -274,13 +287,13 @@ class EchoChamberPostsView extends ItemView {
 		const postHeader = postItem.createDiv('post-header');
 
 		const displayNameEl = postHeader.createSpan('post-display-name');
-		displayNameEl.setText(frontmatter['author_display_name'] ?? 'Unknown');
+		displayNameEl.setText(frontmatter?.['author_display_name'] ?? 'Unknown');
 
 		const usernameEl = postHeader.createSpan('post-username');
-		usernameEl.setText(frontmatter['author_username'] ?? 'unknown');
+		usernameEl.setText(frontmatter?.['author_username'] ?? 'unknown');
 
 		const timestampEl = postHeader.createSpan('post-timestamp');
-		timestampEl.setText(moment(file.stat.mtime).fromNow());
+		timestampEl.setText(moment(file.stat.ctime).fromNow());
 
 		/* Content */
 		const postContentEl = postItem.createDiv('post-content');
@@ -427,6 +440,12 @@ class EchoChamberPostsView extends ItemView {
 
 	registerVaultEvents(): void {
 		const postsFolderPath = this.plugin.settings.postsFolder;
+
+		this.registerEvent(this.app.workspace.on('active-leaf-change', async (leaf) => {
+			if (leaf?.view instanceof EchoChamberPostsView) {
+				leaf.view.lockIn();
+			}
+		}));
 
 		this.registerEvent(this.app.vault.on('create', async (file) => {
 			if (file instanceof TFile && file.path.startsWith(postsFolderPath + '/') && file.extension == 'md') {
