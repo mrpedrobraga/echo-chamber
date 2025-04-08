@@ -32,20 +32,32 @@
     max-width: 100%;
     margin: 0;
     flex-grow: 1;
-    display: flex;
-    align-items: center;
-    flex-direction: column;
-    justify-content: flex-start;
     overflow-y: auto;
     padding: 10px;
     padding-inline-start: 20px;
     scrollbar-width: 10px;
+    gap: 15px;
 }
+
+.notes-list-container {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+/* .notes-list-container {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: wrap;
+    justify-content: stretch;
+} */
 
 .post-notes-ul {
     list-style: none;
     padding-inline-start: 0;
     margin: 0;
+    display: contents;
 }
 
 /* Base container for each post */
@@ -55,11 +67,11 @@
     width: 500px;
     max-width: 100%;
     margin-inline: auto;
-    margin-block-end: 15px;
     border: 1px solid var(--background-modifier-border);
     border-radius: 8px;
     background-color: var(--background-secondary);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    flex-grow: 1;
     display: flex;
     flex-direction: column;
     transition: 100ms;
@@ -108,6 +120,8 @@
     font-size: 1rem;
     user-select: text;
     color: var(--text-normal);
+    flex-grow: 1;
+    transition: 100ms;
 }
 
 .post-actions {
@@ -120,7 +134,7 @@
     border-block-start: 1px solid var(--background-modifier-border-hover);
 }
 
-@container (width < 4   00px) {
+@container (width < 400px) {
     .post-actions {
         flex-direction: column;
         align-items: stretch;
